@@ -20,7 +20,7 @@ class Command:
     ADD_WORD = 'Добавить слово ➕'
     DELETE_WORD = 'Удалить слово🔙'
     NEXT = 'Дальше ⏭'
-    HELP = 'Помощь️'
+    HELP = 'Помощь️ ℹ️'
 
 class MyStates(StatesGroup):
     target_word = State()
