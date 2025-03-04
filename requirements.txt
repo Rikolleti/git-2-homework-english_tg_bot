@@ -1,0 +1,3 @@
+pytelegrambotapi
+configparser
+psycopg2-binary
