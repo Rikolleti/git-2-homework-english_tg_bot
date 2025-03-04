@@ -43,7 +43,6 @@ def insert_words_from_user(target_word: str, russian_word: str, other_words: str
             RETURNING word_id;
             """, (target_word, russian_word, other_words, user_id))
             show_word_id = cur.fetchone()[0]
-            conn.commit()
             return show_word_id
 
 def show_words(user_id):
