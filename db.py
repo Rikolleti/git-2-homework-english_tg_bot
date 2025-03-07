@@ -1,8 +1,15 @@
 import psycopg2
+import configparser
+
+config = configparser.ConfigParser()
+config.read("settings.ini")
+database = config["Postgres"]["database"].strip()
+login = config["Postgres"]["login"].strip()
+password = config["Postgres"]["password"].strip()
 
 
 def get_connection():
-    return psycopg2.connect(database="english_words", user="postgres", password="postgres")
+    return psycopg2.connect(database=database, user=login, password=password)
 
 
 def drop_table():
