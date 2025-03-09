@@ -15,11 +15,9 @@ def get_connection():
 def drop_table():
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-            DROP TABLE IF EXISTS word_list;
-            """
-            )
+            cur.execute("DROP TABLE IF EXISTS userwords;")
+            cur.execute("DROP TABLE IF EXISTS words;")
+            cur.execute("DROP TABLE IF EXISTS users;")
 
 
 def create_table():
@@ -27,45 +25,61 @@ def create_table():
         with conn.cursor() as cur:
             cur.execute(
                 """
-            CREATE TABLE IF NOT EXISTS word_list(
-                word_id SERIAL PRIMARY KEY,
-                target_word VARCHAR(60) NOT NULL,
-                russian_word VARCHAR(60) NOT NULL,
-                other_words VARCHAR(255),
-                user_id BIGINT
-            );
-            """
+                CREATE TABLE IF NOT EXISTS users(
+                    id BIGINT PRIMARY KEY
+                );
+
+                CREATE TABLE IF NOT EXISTS userwords(
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    translate VARCHAR(255) NOT NULL,
+                    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS words(
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    translate VARCHAR(255) NOT NULL
+                );
+                """
             )
 
-
-def insert_words(target_word: str, russian_word: str, other_words: str):
+def insert_words(words):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            word_ids = []
+            for word in words:
+                cur.execute(
+                    """
+                    INSERT INTO words (title, translate)
+                    VALUES (%s, %s)
+                    RETURNING id;
+                    """,
+                    word,
+                )
+                word_id = cur.fetchone()[0]
+                word_ids.append(word_id)
+            return word_ids
+
+
+def insert_words_from_user(title: str, translate: str, user_id: int):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+            user_exists = cur.fetchone()
+            if not user_exists:
+                cur.execute("""INSERT INTO users (id) VALUES (%s) ;""", (user_id,))
+
             cur.execute(
                 """
-            INSERT INTO word_list (target_word, russian_word, other_words)
+            INSERT INTO userwords (title, translate, user_id)
             VALUES (%s, %s, %s)
-            RETURNING word_id;
+            RETURNING user_id;
             """,
-                (target_word, russian_word, other_words),
+                (title, translate, user_id),
             )
-            show_word_id = cur.fetchone()[0]
-            return show_word_id
-
-
-def insert_words_from_user(target_word: str, russian_word: str, other_words: str, user_id: int):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-            INSERT INTO word_list (target_word, russian_word, other_words, user_id)
-            VALUES (%s, %s, %s, %s)
-            RETURNING word_id;
-            """,
-                (target_word, russian_word, other_words, user_id),
-            )
-            show_word_id = cur.fetchone()[0]
-            return show_word_id
+            show_user_id = cur.fetchone()[0]
+            return show_user_id
 
 
 def show_words(user_id):
@@ -73,17 +87,13 @@ def show_words(user_id):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT word_id, target_word, russian_word, other_words
-                FROM word_list
-                WHERE user_id IS NULL OR user_id = %s;
+            SELECT title, translate FROM userwords WHERE user_id = %s
+            UNION
+            SELECT title, translate FROM words;
             """,
                 (user_id,),
             )
-            rows = cur.fetchall()
-            words = [
-                {"word_id": row[0], "target_word": row[1], "russian_word": row[2], "other_words": row[3]}
-                for row in rows
-            ]
+            words = cur.fetchall()
             return words
 
 
@@ -92,40 +102,49 @@ def count_words(user_id: int):
         with conn.cursor() as cur:
             cur.execute(
                 """
-            SELECT COUNT(target_word) FROM word_list
-            WHERE user_id IS NULL OR user_id = %s;
+            SELECT COUNT(title) FROM userwords WHERE user_id = %s
             """,
                 (user_id,),
             )
-            result = cur.fetchone()[0]
-            return result
+            user_words_count = cur.fetchone()[0]
+            cur.execute(
+                """
+                SELECT COUNT(title) FROM words;
+                """
+            )
+            all_words_count = cur.fetchone()[0]
+            total_words = user_words_count + all_words_count
+            return total_words
 
 
-def delete_word(russian_word: str, user_id: int):
+def delete_word(translate: str, user_id: int):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            output = cur.execute(
+            cur.execute(
                 """
-            DELETE FROM word_list
-            WHERE russian_word = %s AND user_id = %s;
+            DELETE FROM userwords
+            WHERE translate = %s AND user_id = %s;
             """,
-                (russian_word, user_id),
+                (translate, user_id),
             )
-            if output is not None:
-                print(f"Word {russian_word} deleted for user {user_id}")
+            if cur.rowcount > 0:
+                print(f"Word {translate} deleted for user {user_id}")
         return cur.rowcount > 0
 
 
 # Инициализация таблицы
-drop_table()
-create_table()
-insert_words("Peace", "Мир", "King, Break, Stop")
-insert_words("Friend", "Друг", "Topic, Look, Drop")
-insert_words("Love", "Любовь", "Heart, Feel, Passion")
-insert_words("Sun", "Солнце", "Light, Day, Sky")
-insert_words("Water", "Вода", "Ocean, River, Drink")
-insert_words("Tree", "Дерево", "Forest, Leaf, Nature")
-insert_words("Book", "Книга", "Read, Page, Story")
-insert_words("Music", "Музыка", "Sound, Song, Melody")
-insert_words("Time", "Время", "Clock, Moment, Hour")
-insert_words("House", "Дом", "Apartment, Room, Building")
+if __name__ == "__main__":
+    drop_table()
+    create_table()
+    words_data = [
+        ("Peace", "Мир"),
+        ("Friend", "Друг"),
+        ("Love", "Любовь"),
+        ("Sun", "Солнце"),
+        ("Water", "Вода"),
+        ("Tree", "Дерево"),
+        ("Book", "Книга"),
+        ("Music", "Музыка"),
+        ("Time", "Время"),
+    ]
+    inserted_words = insert_words(words_data)

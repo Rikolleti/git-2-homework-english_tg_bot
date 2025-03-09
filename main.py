@@ -25,8 +25,8 @@ class Command:
 
 
 class MyStates(StatesGroup):
-    target_word = State()
-    russian_word = State()
+    title = State()
+    translate = State()
     other_words = State()
 
 
@@ -40,13 +40,13 @@ def count(user_id):
     return count_words
 
 
-def delete_word_from_db(russian_word, user_id):
-    res = db.delete_word(russian_word, user_id)
+def delete_word_from_db(translate, user_id):
+    res = db.delete_word(translate, user_id)
     return res
 
 
-def insert_words(target_word, russian_word, other_word, user_id):
-    res = db.insert_words_from_user(target_word, russian_word, other_word, user_id)
+def insert_words(title, translate, user_id):
+    res = db.insert_words_from_user(title, translate, user_id)
     return res
 
 
@@ -96,33 +96,30 @@ def show_card(message, user_id, current_index):
     if not words:
         bot.send_message(message.chat.id, "У вас нет доступных слов.")
         return
+
     if current_index < len(words):
         word = words[current_index]
-        target_word = word["target_word"]
-        russian_word = word["russian_word"]
-        other_words = word["other_words"]
+        title = word[1]
+        translate = word[0]
+        all_translations = [w[0] for w in words if w[0] != translate]
+        random_translations = random.sample(all_translations, 3) + [translate]
+        random.shuffle(random_translations)
 
-        markup = types.ReplyKeyboardMarkup(row_width=2)
-        target_word_btns = [types.KeyboardButton(target_word)]
-        other_words_list = other_words.split(", ")
-        other_words_btns = [types.KeyboardButton(word) for word in other_words_list]
-        buttons = target_word_btns + other_words_btns
-        random.shuffle(buttons)
-
+        buttons = [types.KeyboardButton(option) for option in random_translations]
         next_btn = types.KeyboardButton(Command.NEXT)
         add_word_btn = types.KeyboardButton(Command.ADD_WORD)
         delete_word_btn = types.KeyboardButton(Command.DELETE_WORD)
         help_btn = types.KeyboardButton(Command.HELP)
-
         buttons.extend([next_btn, add_word_btn, delete_word_btn, help_btn])
+        markup = types.ReplyKeyboardMarkup(row_width=2)
         markup.add(*buttons)
 
-        choose = f"Выбери перевод слова:\n🇷🇺 {russian_word}"
+        choose = f"Выбери перевод слова:\n🇷🇺 {title}"
         bot.send_message(message.chat.id, choose, reply_markup=markup)
-        bot.set_state(message.from_user.id, MyStates.target_word, message.chat.id)
+        bot.set_state(message.from_user.id, MyStates.title, message.chat.id)
         with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-            data["target_word"] = target_word
-            data["russian_word"] = russian_word
+            data["title"] = title
+            data["translate"] = translate
             data["current_index"] = current_index
     else:
         bot.send_message(message.chat.id, "Ты выучил все слова !", reply_markup=telebot.types.ReplyKeyboardRemove())
@@ -140,25 +137,19 @@ def next_cards(message):
 @bot.message_handler(func=lambda message: message.text == Command.ADD_WORD)
 def add_word(message):
     bot.send_message(message.chat.id, "Введите слово на английском:")
-    bot.register_next_step_handler(message, process_target_word)
+    bot.register_next_step_handler(message, process_title)
 
 
-def process_target_word(message):
-    target_word = message.text
+def process_title(message):
+    title = message.text
     bot.send_message(message.chat.id, "Введите перевод на русский:")
-    bot.register_next_step_handler(message, process_russian_word, target_word)
+    bot.register_next_step_handler(message, process_translate, title)
 
 
-def process_russian_word(message, target_word):
-    russian_word = message.text
-    bot.send_message(message.chat.id, "Введите 3 некорретных варианта перевода на английском через запятую:")
-    bot.register_next_step_handler(message, process_other_words, target_word, russian_word)
-
-
-def process_other_words(message, target_word, russian_word):
-    other_words = message.text
+def process_translate(message, title):
+    translate = message.text
     user_id = message.from_user.id
-    insert_words(target_word, russian_word, other_words, user_id)
+    insert_words(title, translate, user_id)
     bot.send_message(message.chat.id, "Слово успешно добавлено!")
     from_db(user_id)
     res = count(user_id)
@@ -173,13 +164,16 @@ def delete_word(message):
 
 
 def process_delete_word(message):
-    russian_word = message.text
+    translate = message.text
     user_id = message.from_user.id
-    res = delete_word_from_db(russian_word, user_id)
-    success_output = f"Слово '{russian_word}' удалено."
-    failed_output = f"Слово '{russian_word}' отсутствует в базе или не связано с вашим аккаунтом."
+    res = delete_word_from_db(translate, user_id)
+    count_words = count(user_id)
+    success_output = f"Слово '{translate}' удалено."
+    failed_output = f"Слово '{translate}' отсутствует в базе или не связано с вашим аккаунтом."
+    info = f"Общее количество слов для обучения: {count_words} 🤩"
     if res:
         bot.send_message(message.chat.id, success_output)
+        bot.send_message(message.chat.id, info)
     else:
         bot.send_message(message.chat.id, failed_output)
     from_db(user_id)
@@ -203,8 +197,8 @@ def message_reply(message):
     ]
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        target_word = data.get("target_word")
-    if message.text == target_word:
+        translate = data.get("translate")
+    if message.text == translate:
         bot.send_message(message.chat.id, random.choice(success_messages))
         next_cards(message)
     else:
