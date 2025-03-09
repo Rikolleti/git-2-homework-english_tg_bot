@@ -33,7 +33,7 @@ def create_table():
                     id SERIAL PRIMARY KEY,
                     title VARCHAR(255) NOT NULL,
                     translate VARCHAR(255) NOT NULL,
-                    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE
+                    user_id BIGINT REFERENCES users(id)
                 );
 
                 CREATE TABLE IF NOT EXISTS words(
@@ -61,7 +61,6 @@ def insert_words(words):
                 word_ids.append(word_id)
             return word_ids
 
-
 def insert_words_from_user(title: str, translate: str, user_id: int):
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -69,7 +68,7 @@ def insert_words_from_user(title: str, translate: str, user_id: int):
             user_exists = cur.fetchone()
             if not user_exists:
                 cur.execute("""INSERT INTO users (id) VALUES (%s) ;""", (user_id,))
-
+                conn.commit()
             cur.execute(
                 """
             INSERT INTO userwords (title, translate, user_id)
