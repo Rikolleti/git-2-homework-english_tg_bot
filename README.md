@@ -30,6 +30,10 @@
     ```ini
     [Telegram]
     token_tg=YOUR_BOT_TOKEN
+   [Postgres]
+   database = database
+   login = LOGIN
+   password = PASS
     ```
 4. Запустите бота:
     ```bash
